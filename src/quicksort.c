@@ -152,7 +152,7 @@ main(int argc, char **argv)
     free(a);
     return 0;
 
- usage:
-    printf("quicksort [-n size] [-t threads] [-s]\n");
-    return 1;
+    usage:
+        printf("quicksort [-n size] [-t threads] [-s]\n");
+        return 1;
 }
