@@ -104,24 +104,29 @@ main(int argc, char **argv)
         if(opt < 0)
             break;
         switch(opt) {
-        case 's':
-            serial = 1;
-            break;
-        case 'n':
-            n = atoi(optarg);
-            if(n <= 0)
+            case 's':
+                serial = 1;
+                break;
+            case 'n':
+                n = atoi(optarg);
+                if(n <= 0)
+                    goto usage;
+                break;
+            case 't':
+                nthreads = atoi(optarg);
+                if(nthreads == 0)
+                    //Initalisation de nombre de thread par defaut.
+                    nthreads = sched_default_threads();
+                if(nthreads <= 0)
+                    goto usage;
+
+                break;
+            default:
                 goto usage;
-            break;
-        case 't':
-            nthreads = atoi(optarg);
-            if(nthreads <= 0)
-                goto usage;
-            break;
-        default:
-            goto usage;
         }
     }
-
+    //printf("threads: %d\n", nthreads);
+    
     a = malloc(n * sizeof(int));
 
     unsigned long long s = 0;
