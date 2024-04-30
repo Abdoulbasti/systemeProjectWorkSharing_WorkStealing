@@ -88,6 +88,9 @@ quicksort(void *closure, struct scheduler *s)
     assert(rc >= 0);
 }
 
+
+
+/*
 int
 main(int argc, char **argv)
 {
@@ -160,4 +163,21 @@ main(int argc, char **argv)
     usage:
         printf("quicksort [-n size] [-t threads] [-s]\n");
         return 1;
+}*/
+
+
+
+int main(int argc, char const *argv[])
+{
+
+    //Task t1 = {taskPrint, "Première tâche"};
+    //Task t2 = {taskPrint, "Deuxième tâche"};
+
+    sched_init(0, 10, taskPrint, "Première tâche");
+    //sched_init(0, 10, taskPrint, "Première tâche");
+    //sched_init(0, 10, taskPrint, "Première tâche");
+    
+
+
+    return 0;
 }
