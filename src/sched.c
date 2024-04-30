@@ -10,8 +10,6 @@
 
 struct scheduler* ordonnanceur;
 
-pthread_t threads[3]; //Stockage du nombre de thread en forme de variable globale.
-
 /***********************************************************Fonction pour la gestion de la pile**********************************************************/
 // Implémentation des fonctions de la pile
 Stack* createStack(int maxSize) {
@@ -29,7 +27,7 @@ Stack* createStack(int maxSize) {
 
 // Fonction pour ajouter une tâche au sommet de la pile
 void push(Stack* stack, Task tache) {
-    if (stack->currentSize >= stack->maxSize) {
+    if (stack->currentSize == stack->maxSize) {
         fprintf(stderr, "Pile pleine, impossible d'ajouter une nouvelle tâche\n");
         return;
     }
@@ -45,19 +43,19 @@ void push(Stack* stack, Task tache) {
 }
 
 // Fonction pour retirer une tâche au sommet de la pile et la retourner
-Task* pop(Stack* stack) {
+//La tache retirer est stocker dans task
+int pop(Stack* stack, Task* task) {
     if (stack->top == NULL) {
         fprintf(stderr, "Pile vide\n");
-        exit(EXIT_FAILURE);
-        return NULL;
+        return -1;
     }
 
     Node* temp = stack->top;
-    Task poppedTask = temp->taskToDo;
+    *task = temp->taskToDo;
     stack->top = temp->next;
     free(temp);
     stack->currentSize--;
-    return &poppedTask;
+    return 1;
 }
 
 int getCurrentSize(Stack* stack) {
@@ -184,7 +182,7 @@ int sched_init(int nthreads, int qlen, taskfunc f, void *closure) {
 
 
     //Pour verifier l'enfilement on doit afficher la taille de la pile
-    //printf("La taille de la pile est %d\n", getCurrentSize(ordonnanceur->taskStack));
+    printf("La taille de la pile est %d\n", getCurrentSize(ordonnanceur->taskStack));
 
 
 
@@ -200,18 +198,18 @@ void taskPrint(void* arg, struct scheduler* s) {
 
 
 void threadFunctionTask(Stack *stack, struct scheduler* s) {
-    Task* task;
+    int popReturn = 0;
 
     //Tout le temps il va essayer de depiler une tache de la pile pour être executer.
     //Si cette tache n'est pas disponible pour cet thread le thread dors un momement et redemande ainsi de suite
     while (1) {
+        Task* task =(Task*) malloc(sizeof(Task));
         // Vérifie que la défilement a réussi
-        if ((task = pop(stack)) != NULL) { 
+        if ((popReturn = pop(stack, task)) == 1) { 
             task->f(task->closure, s);
+            free(task);
         }
         else {
         }
     }
-
-    return NULL;
 }
