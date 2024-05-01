@@ -5,6 +5,9 @@
 #include <assert.h>
 #include "sched.h"
 
+//Creation d'une variable globale
+struct scheduler* ordonnanceur;
+
 int
 partition(int *a, int lo, int hi)
 {
@@ -115,14 +118,10 @@ main(int argc, char **argv)
                 if(n <= 0)
                     goto usage;
                 break;
-            case 't':
+            case 't':          
                 nthreads = atoi(optarg);
-                if(nthreads == 0)
-                    //Initalisation de nombre de thread par defaut.
-                    nthreads = sched_default_threads();
-                if(nthreads <= 0)
+                if (nthreads < 0)
                     goto usage;
-
                 break;
             default:
                 goto usage;
@@ -167,7 +166,7 @@ main(int argc, char **argv)
 
 
 
-int main(int argc, char const *argv[])
+/*int main(int argc, char const *argv[])
 {
 
     //Task t1 = {taskPrint, "Première tâche"};
@@ -179,5 +178,21 @@ int main(int argc, char const *argv[])
     
 
 
+    return 0;
+}*/
+
+
+int main(int argc, char const *argv[])
+{
+    struct scheduler* ordonnanceur = (struct scheduler*) malloc(sizeof(struct scheduler));
+    initializeSchedulerForThread(ordonnanceur);
+        
+    //Création d'une nouvelle pile.
+    ordonnanceur->taskStack = createStack(10);
+    
+
+    sched_spawn(simpleTask, "Hello, World!", ordonnanceur);
+
+    free(ordonnanceur);
     return 0;
 }

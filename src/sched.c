@@ -8,7 +8,7 @@
 #include <semaphore.h>
 
 
-struct scheduler* ordonnanceur;
+
 
 /***********************************************************Fonction pour la gestion de la pile**********************************************************/
 // Implémentation des fonctions de la pile
@@ -84,7 +84,7 @@ int getCurrentSize(Stack* stack) {
 
 
 //Cette fonction est forcement appeler avant la création des threads
-void initializeSchedulerForThread(){
+void initializeSchedulerForThread(struct scheduler* ordonnanceur){
     ordonnanceur =(struct scheduler*) malloc(sizeof(struct scheduler));
 
     // Initialisation du mutex avec pthread_mutex_init
@@ -123,29 +123,34 @@ obligé d’enfiler plus de tâches que prévu, mais il n’est pas non plus obl
 La fonction sched_spawn retourne immédiatement (dès qu’elle s’est arrangée pour que la
 tâche soit effectuée).*/
 int sched_spawn(taskfunc f, void *closure, struct scheduler *s) {
-    /*if (s == NULL) {
-        fprintf(stderr, "Erreur: ordonnanceur non initialisé\n");
-        return -1;  // Retourne -1 pour indiquer une erreur
-    }*/
-
     //Verifier que la pile est pleine.
     if (getCurrentSize(s->taskStack) == s->taskStack->maxSize) {
         fprintf(stderr, "Erreur: la capacité de l'ordonnaceur est atteint\n");
         return -1;  // Retourne -1 pour indiquer une erreur
     }
-    Task tache;
-    tache.f = f;
-    tache.closure = closure;
-
+    
     //Ajouter une tache à la pile(Action d'enfilement), gestion de l'acces concurante à la pile
-    push(s->taskStack, tache);
+    Task tacheEnfilee = {f, closure};
+    push(s->taskStack, tacheEnfilee);
+    printf("TESTING\n");
+    printf("Taille de la pile %d\n", getCurrentSize(s->taskStack));
 
-
-    //Après enfilement de la tache on s'arrange pour que cette tache enfiler soit executer
-    //L'acces concurante pour recuper une tache pour qu'il soit executer.
+    //Après enfilement de la tache on s'arrange pour defiler une tache et l'executer
+    Task taskToExecute;
+    if (pop(s->taskStack, &taskToExecute) == -1) {
+        printf("Error during task dequeuing\n");
+        return -1;
+    }
+    printf("TESTING\n");
+    printf("Taille de la pile %d\n", getCurrentSize(s->taskStack));
+    taskToExecute.f(taskToExecute.closure, s);
+    return 1;
     
     //Fin du traitement
-    return 1;
+}
+
+void simpleTask(void *closure, struct scheduler *s) {
+    printf("Executing task with arg: %s\n", (char*)closure);
 }
 
 
@@ -163,8 +168,15 @@ l’utilisateur essaie d’enfiler plus de qlen tâches, l’ordonnanceur pourra
 La fonction sched_init retourne lorsqu’il n’y a plus de tâches à effectuer, et alors son résultat
 vaut 1. Elle retourne -1 si l’ordonnanceur n’a pu être initialisé.*/
 int sched_init(int nthreads, int qlen, taskfunc f, void *closure) {
+    if(nthreads == 0) {
+        nthreads = sched_default_threads();
+        printf("le nombre de threads systeme %d\n",nthreads);
+    }
+
+    struct scheduler* ordonnanceur = (struct scheduler*) malloc(sizeof(struct scheduler));
+    
     //initalisation des primitives de synchronisation.
-    initializeSchedulerForThread();
+    initializeSchedulerForThread(ordonnanceur);
 
     //Les threads qui sont créer ici on doit avoir acces à eu dans la fonction spawn
 
@@ -172,7 +184,7 @@ int sched_init(int nthreads, int qlen, taskfunc f, void *closure) {
     ordonnanceur->taskStack = createStack(qlen);
 
     //Enfilement de la tache initial
-    //On doit aussi proteger l'enfilement dans la pile
+    //On doit aussi proteger l'enfilement dans la pile : Cette protection s'effectue à l'interieur de la fonction spawn
     sched_spawn(f, closure, ordonnanceur);
     //Cet premier enfilement va generer recursivement les fututre enfilement sched_spawn
 
@@ -188,6 +200,11 @@ int sched_init(int nthreads, int qlen, taskfunc f, void *closure) {
 
     //Au moment ou sched_init realise que tout qu'il n'y a plus de tache il termine(variable conditionnels ???)
     //L’ordonnanceur termine lorsque la pile est vide et tous les threads sont endormis.
+
+    //Gestion de la fin des threads
+
+    //Liberer les ressources memoire de l'ordonnanceur
+    free(ordonnanceur);
     return 1;
 }
 

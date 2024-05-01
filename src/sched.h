@@ -30,7 +30,6 @@ struct scheduler {
     int activeThreads;           // Compteur de threads actifs
 };
 
-
 static inline int
 sched_default_threads()
 {
@@ -43,3 +42,5 @@ int sched_spawn(taskfunc f, void *closure, struct scheduler *s);
 void initializeSchedulerForThread();
 
 void taskPrint(void* arg, struct scheduler* s);
+void simpleTask(void *closure, struct scheduler *s);
+Stack* createStack(int maxSize);
