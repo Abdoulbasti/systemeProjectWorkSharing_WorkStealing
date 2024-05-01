@@ -93,7 +93,7 @@ quicksort(void *closure, struct scheduler *s)
 
 
 
-/*
+
 int
 main(int argc, char **argv)
 {
@@ -162,7 +162,7 @@ main(int argc, char **argv)
     usage:
         printf("quicksort [-n size] [-t threads] [-s]\n");
         return 1;
-}*/
+}
 
 
 
@@ -182,17 +182,37 @@ main(int argc, char **argv)
 }*/
 
 
-int main(int argc, char const *argv[])
+/*int main(int argc, char const *argv[])
 {
     struct scheduler* ordonnanceur = (struct scheduler*) malloc(sizeof(struct scheduler));
     initializeSchedulerForThread(ordonnanceur);
         
     //Création d'une nouvelle pile.
     ordonnanceur->taskStack = createStack(10);
-    
+
 
     sched_spawn(simpleTask, "Hello, World!", ordonnanceur);
 
     free(ordonnanceur);
+    return 0;
+}*/
+
+
+int main() {
+    struct scheduler* ordonnanceur = malloc(sizeof(struct scheduler));
+    int nthreads = 4;  // Nombre de threads souhaité
+
+    initializeSchedulerForThread(ordonnanceur, nthreads);
+
+    // Ajout de quelques tâches pour tester
+    sched_spawn(simpleTask, "Task 1", ordonnanceur);
+    sched_spawn(simpleTask, "Task 2", ordonnanceur);
+    sched_spawn(simpleTask, "Task 3", ordonnanceur);
+    sched_spawn(simpleTask, "Task 4", ordonnanceur);
+
+    sleep(5);  // Laissez un peu de temps pour que les tâches s'exécutent
+
+    cleanupScheduler(ordonnanceur, nthreads);
+
     return 0;
 }
