@@ -51,7 +51,7 @@ void push(Stack* stack, Task tache, pthread_mutex_t lock, pthread_cond_t taskAva
 
 // Fonction pour retirer une tâche au sommet de la pile et la retourner
 //La tache retirer est stocker dans task
-int pop(Stack* stack, Task* task, pthread_mutex_t lock, pthread_cond_t taskAvailable) {
+/*int pop(Stack* stack, Task* task, pthread_mutex_t lock, pthread_cond_t taskAvailable) {
     pthread_mutex_lock(&lock);
     while (stack->top == NULL) {
         //Mettre le thread appellant en attente jusqu'a ce qu'une tâche soit disponible
@@ -65,7 +65,30 @@ int pop(Stack* stack, Task* task, pthread_mutex_t lock, pthread_cond_t taskAvail
     stack->currentSize--;
     pthread_mutex_unlock(&lock);
     return 1;
+}*/
+
+int pop(Stack* stack, Task* task, pthread_mutex_t lock, pthread_cond_t taskAvailable, pthread_cond_t idle, int activeThreads) {
+    pthread_mutex_lock(&lock);
+
+    while (stack->top == NULL) {
+        activeThreads--;  // Le thread devient inactif car il attend
+        if (activeThreads == 0) {
+            pthread_cond_signal(&idle);  // Peut signaler la condition de terminaison
+        }
+        pthread_cond_wait(&taskAvailable, &lock);
+        activeThreads++;  // Le thread redevient actif
+    }
+
+    Node* temp = stack->top;
+    *task = temp->taskToDo;
+    stack->top = temp->next;
+    stack->currentSize--;
+    free(temp);
+
+    pthread_mutex_unlock(&lock);
+    return 1;
 }
+
 
 int getCurrentSize(Stack* stack) {
     if (stack == NULL) {
@@ -93,7 +116,7 @@ int getCurrentSize(Stack* stack) {
 
 
 //Cette fonction est forcement appeler avant la création des threads
-void initializeSchedulerForThread(struct scheduler* ordonnanceur, int nthread){
+void initializeSchedulerForThread(struct scheduler* ordonnanceur, int nthread, int qlen){
     // Initialisation du mutex avec pthread_mutex_init
     if (pthread_mutex_init(&ordonnanceur->lock, NULL) != 0) {
         fprintf(stderr, "Failed to initialize the mutex\n");
@@ -116,6 +139,12 @@ void initializeSchedulerForThread(struct scheduler* ordonnanceur, int nthread){
     }
 
     ordonnanceur->threads = (pthread_t*) malloc(sizeof(pthread_t)*nthread);
+
+    // Initialiser tous les threads comme actifs
+    ordonnanceur->activeThreads = nthread;
+
+    //Création d'une nouvelle pile.
+    ordonnanceur->taskStack = createStack(qlen);
 }
 
 
@@ -131,7 +160,7 @@ même, soit retourner -1 avec errno valant EAGAIN. En d’autres termes, l’ord
 obligé d’enfiler plus de tâches que prévu, mais il n’est pas non plus obligé de détecter ce cas.
 La fonction sched_spawn retourne immédiatement (dès qu’elle s’est arrangée pour que la
 tâche soit effectuée).*/
-int sched_spawn(taskfunc f, void *closure, struct scheduler *s) {
+/*int sched_spawn(taskfunc f, void *closure, struct scheduler *s) {
     //Ajouter une tache à la pile(Action d'enfilement), gestion de l'acces concurante à la pile
     Task tacheEnfilee = {f, closure};
     push(s->taskStack, tacheEnfilee, s->lock, s->taskAvailable);
@@ -145,6 +174,13 @@ int sched_spawn(taskfunc f, void *closure, struct scheduler *s) {
     //printf("TESTING\n");
     //printf("Taille de la pile %d\n", getCurrentSize(s->taskStack));
     //taskToExecute.f(taskToExecute.closure, s);
+    return 1;
+}*/
+
+int sched_spawn(taskfunc f, void *closure, struct scheduler *s) {
+    //Ajouter une tache à la pile(Action d'enfilement), gestion de l'acces concurante à la pile
+    Task tacheEnfilee = {f, closure};
+    push(s->taskStack, tacheEnfilee, s->lock, s->taskAvailable);
     return 1;
 }
 
@@ -175,10 +211,8 @@ int sched_init(int nthreads, int qlen, taskfunc f, void *closure) {
     struct scheduler* ordonnanceur = (struct scheduler*) malloc(sizeof(struct scheduler));
     
     //initalisation des primitives de synchronisation.
-    initializeSchedulerForThread(ordonnanceur, nthreads);
+    initializeSchedulerForThread(ordonnanceur, nthreads, qlen);
 
-    //Création d'une nouvelle pile.
-    ordonnanceur->taskStack = createStack(qlen);
 
     //Creation et execution continue des threads qui essaye chacun de prendre une tache pour l'executer.
     for (int i = 0; i < nthreads; i++) {
@@ -186,20 +220,19 @@ int sched_init(int nthreads, int qlen, taskfunc f, void *closure) {
     }
     
 
-
-
-    //Enfilement de la tache initial
-    //On doit aussi proteger l'enfilement dans la pile : Cette protection s'effectue à l'interieur de la fonction spawn
     //Cet premier enfilement va generer recursivement les fututre enfilement sched_spawn
     sched_spawn(f, closure, ordonnanceur);
 
-
-    //L’ordonnanceur termine lorsque la pile est vide et tous les threads sont endormis.
     /*
     si tout les threads endormis et la pile est vide :
         effectuer les netoyages
         retourner 1 : terminer l'ordonnanceur
     */
+    pthread_mutex_lock(&ordonnanceur->lock);
+    while (ordonnanceur->activeThreads > 0 || getCurrentSize(ordonnanceur->taskStack) > 0) {
+        pthread_cond_wait(&ordonnanceur->idle, &ordonnanceur->lock);
+    }
+    pthread_mutex_unlock(&ordonnanceur->lock);
 
     //Cleanup
     cleanupScheduler(ordonnanceur, nthreads);
@@ -207,8 +240,8 @@ int sched_init(int nthreads, int qlen, taskfunc f, void *closure) {
 }
 
 // Fonctions tâches pour les tests
-void taskPrint(void* arg, struct scheduler* s) {
-    printf("Task: %s\n", (char*)arg);
+void taskPrint(void* closure, struct scheduler* s) {
+    printf("Task: %s\n", (char*)closure);
 }
 
 
@@ -224,7 +257,7 @@ void cleanupScheduler(struct scheduler *s, int nthreads) {
     // Clean up mutex and condition variables
     pthread_mutex_destroy(&s->lock);
     pthread_cond_destroy(&s->taskAvailable);
-    //pthread_cond_destroy(&s->idle);
+    pthread_cond_destroy(&s->idle);
 
     // Free the stack and the scheduler structure
     free(s->taskStack);
@@ -236,7 +269,8 @@ void cleanupScheduler(struct scheduler *s, int nthreads) {
 void* threadFunctionTask(struct scheduler* s) {
     Task task;
     while (1) {
-        if (pop(s->taskStack, &task, s->lock, s->taskAvailable) == 1) {
+        //int pop(Stack* stack, Task* task, pthread_mutex_t* lock, pthread_cond_t* taskAvailable, pthread_cond_t* idle, int* activeThreads)
+        if (pop(s->taskStack, &task, s->lock, s->taskAvailable, s->idle, s->activeThreads) == 1) {
             task.f(task.closure, s);
             printf("Executing function...\n");
         }

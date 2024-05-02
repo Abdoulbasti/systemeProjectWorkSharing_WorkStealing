@@ -34,9 +34,8 @@ struct scheduler {
     pthread_mutex_t lock;           // Mutex pour l'accès exclusif à la pile
     pthread_cond_t taskAvailable;   // Condition variable pour signaler la disponibilité de tâches
     pthread_cond_t idle;            // Condition variable pour signaler que l'ordonnanceur est oisif
-    //int maxTasks;                 // Nombre maximum de tâches que la pile peut contenir
-    int activeThreads;              // Compteur de threads actifs
     pthread_t* threads;             // Nombre de threads a créer.
+    int activeThreads;              // Compteur de threads actifs
 };
 
 
@@ -44,8 +43,12 @@ struct scheduler {
 int sched_init(int nthreads, int qlen, taskfunc f, void *closure);
 int sched_spawn(taskfunc f, void *closure, struct scheduler *s);
 
-void initializeSchedulerForThread(struct scheduler* ordonnanceur, int nthread);
 
-void taskPrint(void* arg, struct scheduler* s);
-void simpleTask(void *closure, struct scheduler *s);
+void initializeSchedulerForThread(struct scheduler* ordonnanceur, int nthread, int qlen);
 Stack* createStack(int maxSize);
+int getCurrentSize(Stack* stack);
+int pop(Stack* stack, Task* task, pthread_mutex_t lock, pthread_cond_t taskAvailable, pthread_cond_t idle, int activeThreads);
+void push(Stack* stack, Task tache, pthread_mutex_t lock, pthread_cond_t taskAvailable);
+void taskPrint(void* closure, struct scheduler* s);
+void cleanupScheduler(struct scheduler *s, int nthreads);
+void* threadFunctionTask(struct scheduler* s);
