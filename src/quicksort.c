@@ -5,9 +5,7 @@
 #include <assert.h>
 #include "sched.h"
 
-//Creation d'une variable globale
-struct scheduler* ordonnanceur;
-
+/*
 int
 partition(int *a, int lo, int hi)
 {
@@ -162,7 +160,7 @@ main(int argc, char **argv)
     usage:
         printf("quicksort [-n size] [-t threads] [-s]\n");
         return 1;
-}
+}*/
 
 
 
@@ -197,22 +195,34 @@ main(int argc, char **argv)
     return 0;
 }*/
 
+void taskPrint(void* closure, struct scheduler* s) {
+    int count = *(int*)closure;
+    
+    //Condition d'arrêt de la boucle recursive.
+    if (count <= 0) {
+        return;
+    }
+
+    printf("Tâche effectuée !!!!!!\n");
+    count--; // Décrémenter le compteur
+
+    if (count > 0) {
+        int* newClosure = malloc(sizeof(int));
+        if (newClosure == NULL) {
+            fprintf(stderr, "Erreur d'allocation mémoire\n");
+            return;
+        }
+        *newClosure = count;
+        sched_spawn(taskPrint, newClosure, s); // Enfiler une nouvelle tâche
+    }
+}
+
 
 int main() {
-    struct scheduler* ordonnanceur = malloc(sizeof(struct scheduler));
-    int nthreads = 4;  // Nombre de threads souhaité
-
-    initializeSchedulerForThread(ordonnanceur, nthreads);
-
-    // Ajout de quelques tâches pour tester
-    sched_spawn(simpleTask, "Task 1", ordonnanceur);
-    sched_spawn(simpleTask, "Task 2", ordonnanceur);
-    sched_spawn(simpleTask, "Task 3", ordonnanceur);
-    sched_spawn(simpleTask, "Task 4", ordonnanceur);
-
-    sleep(5);  // Laissez un peu de temps pour que les tâches s'exécutent
-
-    cleanupScheduler(ordonnanceur, nthreads);
-
-    return 0;
+    int nthreads = 0, qlen = 100;
+    int n = 5;
+    int* closure = malloc(sizeof(int));  
+    *closure = n;
+    int ret = sched_init(nthreads, qlen, taskPrint, closure);
+    printf("Fin du scheduler, eretour du sched %d\n", ret);
 }
