@@ -220,9 +220,11 @@ void taskPrint(void* closure, struct scheduler* s) {
 
 int main() {
     int nthreads = 0, qlen = 100;
-    int n = 5;
+    int n = 10;
     int* closure = malloc(sizeof(int));  
     *closure = n;
     int ret = sched_init(nthreads, qlen, taskPrint, closure);
     printf("Fin du scheduler, eretour du sched %d\n", ret);
+
+    return 0;
 }
