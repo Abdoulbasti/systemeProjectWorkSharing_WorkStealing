@@ -5,7 +5,6 @@
 #include <assert.h>
 #include "sched.h"
 
-/*
 int
 partition(int *a, int lo, int hi)
 {
@@ -89,9 +88,6 @@ quicksort(void *closure, struct scheduler *s)
     assert(rc >= 0);
 }
 
-
-
-
 int
 main(int argc, char **argv)
 {
@@ -108,25 +104,24 @@ main(int argc, char **argv)
         if(opt < 0)
             break;
         switch(opt) {
-            case 's':
-                serial = 1;
-                break;
-            case 'n':
-                n = atoi(optarg);
-                if(n <= 0)
-                    goto usage;
-                break;
-            case 't':          
-                nthreads = atoi(optarg);
-                if (nthreads < 0)
-                    goto usage;
-                break;
-            default:
+        case 's':
+            serial = 1;
+            break;
+        case 'n':
+            n = atoi(optarg);
+            if(n <= 0)
                 goto usage;
+            break;
+        case 't':
+            nthreads = atoi(optarg);
+            if(nthreads <= 0)
+                goto usage;
+            break;
+        default:
+            goto usage;
         }
     }
-    //printf("threads: %d\n", nthreads);
-    
+
     a = malloc(n * sizeof(int));
 
     unsigned long long s = 0;
@@ -157,74 +152,7 @@ main(int argc, char **argv)
     free(a);
     return 0;
 
-    usage:
-        printf("quicksort [-n size] [-t threads] [-s]\n");
-        return 1;
-}*/
-
-
-
-/*int main(int argc, char const *argv[])
-{
-
-    //Task t1 = {taskPrint, "Première tâche"};
-    //Task t2 = {taskPrint, "Deuxième tâche"};
-
-    sched_init(0, 10, taskPrint, "Première tâche");
-    //sched_init(0, 10, taskPrint, "Première tâche");
-    //sched_init(0, 10, taskPrint, "Première tâche");
-    
-
-
-    return 0;
-}*/
-
-
-/*int main(int argc, char const *argv[])
-{
-    struct scheduler* ordonnanceur = (struct scheduler*) malloc(sizeof(struct scheduler));
-    initializeSchedulerForThread(ordonnanceur);
-        
-    //Création d'une nouvelle pile.
-    ordonnanceur->taskStack = createStack(10);
-
-
-    sched_spawn(simpleTask, "Hello, World!", ordonnanceur);
-
-    free(ordonnanceur);
-    return 0;
-}*/
-
-void taskPrint(void* closure, struct scheduler* s) {
-    int count = *(int*)closure;
-    
-    //Condition d'arrêt de la boucle recursive.
-    if (count <= 0) {
-        return;
-    }
-
-    printf("Tâche effectuée !!!!!!\n");
-    count--; // Décrémenter le compteur
-
-    if (count > 0) {
-        int* newClosure = malloc(sizeof(int));
-        if (newClosure == NULL) {
-            fprintf(stderr, "Erreur d'allocation mémoire\n");
-            return;
-        }
-        *newClosure = count;
-        sched_spawn(taskPrint, newClosure, s); // Enfiler une nouvelle tâche
-    }
-}
-
-
-int main() {
-    int nthreads = 0, qlen = 100;
-    int n = 10;
-    int* closure = malloc(sizeof(int));  
-    *closure = n;
-    int ret = sched_init(nthreads, qlen, taskPrint, closure);
-    printf("Fin du scheduler, eretour du sched %d\n", ret);
-
-    return 0;
+ usage:
+    printf("quicksort [-n size] [-t threads] [-s]\n");
+    return 1;
 }
