@@ -36,6 +36,7 @@ struct scheduler {
     pthread_cond_t idle;            // Condition variable pour signaler que l'ordonnanceur est oisif
     pthread_t* threads;             // Nombre de threads a créer.
     int activeThreads;              // Compteur de threads actifs
+    int shutdown;                   // Shutdown
 };
 
 
@@ -48,7 +49,8 @@ void initializeSchedulerForThread(struct scheduler* ordonnanceur, int nthread, i
 Stack* createStack(int maxSize);
 int getCurrentSize(Stack* stack);
 //int pop(Stack* stack, Task* task, pthread_mutex_t lock, pthread_cond_t taskAvailable, pthread_cond_t idle, int activeThreads);
-int pop(Stack* stack, Task* task, pthread_mutex_t* lock, pthread_cond_t* taskAvailable, pthread_cond_t* idle, int* activeThreads);
+//int pop(Stack* stack, Task* task, pthread_mutex_t* lock, pthread_cond_t* taskAvailable, pthread_cond_t* idle, int* activeThreads);
+int pop(Stack* stack, Task* task, pthread_mutex_t* lock, pthread_cond_t* taskAvailable, pthread_cond_t* idle, int* activeThreads, int* shutdown);
 int push(Stack* stack, Task tache, pthread_mutex_t* lock, pthread_cond_t* taskAvailable);
 //void push(Stack* stack, Task tache, pthread_mutex_t lock, pthread_cond_t taskAvailable);
 void taskPrint(void* closure, struct scheduler* s);
