@@ -1,11 +1,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
-#include <time.h>
-#include <assert.h>
 #include "sched.h"
 #include <pthread.h>
-#include <semaphore.h>
 #include <errno.h>
 
 //------- La pile -------
