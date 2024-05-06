@@ -37,7 +37,7 @@ int pop(Noeud **noeud, Pile* pile) {
     *noeud = pile->top;
     pile->top = pile->top->next;
     pile->currentSize--;
-    return 0;
+    return 1;
 }
 
 int push(Pile* pile, taskfunc task, void *closure) {
@@ -55,7 +55,7 @@ int push(Pile* pile, taskfunc task, void *closure) {
     nouveauNoeud->next = pile->top;
     pile->top = nouveauNoeud;
     pile->currentSize++;
-    return 0;
+    return 1;
 }
 
 void* threadFunction(void* scheduler) {
@@ -96,7 +96,7 @@ int pile_init(struct scheduler *scheduler, int qlen){
 
     scheduler->pile = pile;
 
-    return 0;
+    return 1;
 }
 
 int threads_init(struct scheduler *scheduler, int nthreads) {
@@ -110,7 +110,7 @@ int threads_init(struct scheduler *scheduler, int nthreads) {
             return -1;
         }
     }
-    return 0;
+    return 1;
 }
 
 int mutex_init(struct scheduler *scheduler){
@@ -123,13 +123,15 @@ int mutex_init(struct scheduler *scheduler){
     if (pthread_cond_init(&scheduler->c_workingThreads, NULL) < 0) {
         return -1;
     }
-    return 0;
+    return 1;
 }
 
 int sched_init(int nthreads, int qlen, taskfunc f, void *closure){
     if (nthreads < 0) {
         nthreads = sched_default_threads();
+        #ifdef DEBUG
         printf("On a %d threads.\n", nthreads);
+        #endif
     }
 
     struct scheduler* ordonnanceur = (struct scheduler*) malloc(sizeof(struct scheduler));
@@ -137,31 +139,41 @@ int sched_init(int nthreads, int qlen, taskfunc f, void *closure){
         perror("Erreur d'allocation mémoire de l'ordonnanceur");
         return -1;
     }
+    #ifdef DEBUG
     printf("Ordonnanceur alloué\n");
+    #endif
 
     if (mutex_init(ordonnanceur) < 0){
         perror("Erreur initialisation des mutex");
         return -1;
     }
+    #ifdef DEBUG
     printf("Mutex initialisé\n");
+    #endif
     
     if (pile_init(ordonnanceur, qlen) < 0){
         perror("Erreur d'allocation mémoire de la pile");
         return -1;
     }
+    #ifdef DEBUG
     printf("Pile initialisé\n");
+    #endif
 
     if (threads_init(ordonnanceur, nthreads) < 0){
         perror("Erreur initialisation des threads");
         return -1;
     }
+    #ifdef DEBUG
     printf("Threads initialisés\n");
+    #endif
 
     if (sched_spawn(f, closure, ordonnanceur) < 0) {
         perror("Erreur tache initail");
         return -1;
     }
+    #ifdef DEBUG
     printf("Tache initial ajouté\n");
+    #endif
 
     pthread_mutex_lock(&ordonnanceur->m_scheduler);    
     while (ordonnanceur->workingThreads > 0 || ordonnanceur->pile->currentSize > 0) {

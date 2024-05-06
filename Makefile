@@ -1,45 +1,49 @@
 .PHONY: all clean
+CC = gcc
+CFLAGS = -Wall -pthread
 
-# Compilateur
-CC := gcc
-
-# Options de compilation
-# -g : permet le débogage
-# -Wall : active la plupart des avertissements de compilation
-# -pthread : pour la programmation avec des threads
-CFLAGS := -g -Wall -pthread
-
-# Répertoires
 SRC_DIR := src
+OBJ_DIR := obj
 BIN_DIR := bin
 
-# Fichiers source et objets
-SOURCES := $(wildcard $(SRC_DIR)/*.c)
-OBJECTS := $(SOURCES:$(SRC_DIR)/%.c=$(BIN_DIR)/%.o)
+SHARING := $(BIN_DIR)/sharing
+STEALING := $(BIN_DIR)/stealing
+BENCHMARK := $(BIN_DIR)/benchmark
+SRC_BENCHMARK := $(SRC_DIR)/benchmark.c
+SRC_QUICKSORT := $(SRC_DIR)/quicksort.c
+SRC_SHARING := $(SRC_DIR)/work_sharing.c
+SRC_STEALING := $(SRC_DIR)/work_stealing.c
+OBJ_SHARING := $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(SRC_SHARING))
+OBJ_STEALING := $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(SRC_STEALING))
 
-# Nom de l'exécutable
-EXECUTABLE := $(BIN_DIR)/program
+all: sharing stealing benchmack
+sharing: $(SHARING)
+stealing: $(STEALING)
+benchmack: $(BENCHMARK)
 
-# Règle par défaut
-all: $(EXECUTABLE)
-
-# Lien
-$(EXECUTABLE): $(OBJECTS)
-	$(CC) $(CFLAGS) $^ -o $@
-
-# Compilation
-$(BIN_DIR)/%.o: $(SRC_DIR)/%.c
+$(SHARING): $(SRC_QUICKSORT) $(OBJ_SHARING)
 	@mkdir -p $(BIN_DIR)
-	$(CC) $(CFLAGS) -c $^ -o $@
+	$(CC) $(CFLAGS) -o $@ $^
 
 
-# Exécution du programme
-#run: $(EXECUTABLE)
-#	@echo "Exécution de $(EXECUTABLE)..."
-#	@./$(EXECUTABLE)
+$(STEALING): $(SRC_QUICKSORT) $(OBJ_STEALING)
+	@mkdir -p $(BIN_DIR)
+	$(CC) $(CFLAGS) -o $@ $^
 
 
-clean:
-	rm -f $(BIN_DIR)/*.o $(EXECUTABLE)
-	@echo "Nettoyage complet!"
+$(BENCHMARK): $(SRC_BENCHMARK)
+	@mkdir -p $(BIN_DIR)
+	$(CC) $(CFLAGS) -o $@ $^
 
+
+$(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
+	@mkdir -p $(OBJ_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+clean: clean_obj clean_bin
+
+clean_obj:
+	rm -rf $(OBJ_DIR)
+
+clean_bin:
+	rm -rf $(BIN_DIR)

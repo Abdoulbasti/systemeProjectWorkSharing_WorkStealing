@@ -1,3 +1,5 @@
+//#define DEBUG =false
+
 struct scheduler;
 
 typedef void (*taskfunc)(void*, struct scheduler *);

@@ -8,14 +8,14 @@
 #include <semaphore.h>
 #include <errno.h>
 
-//--------- La pile ---------
+//------- La pile -------
 //
 //          TOP
 //          | ^
 //     prev | | next
 //          v |
 //          BOT
-//     
+//
 
 typedef struct Noeud {
     taskfunc taskfunc;
@@ -29,15 +29,20 @@ typedef struct Deques {
     Noeud* bottom;
     int maxSize;
     int currentSize;
+    pthread_mutex_t m_thread;
 } Deques;
 
-struct scheduler {
+typedef struct thread {
     Deques* pile;
-    int workingThreads;
-    pthread_t* threads;
+    pthread_t thread;
+} thread;
+
+struct scheduler {
+    int nbThread;
+    thread* threads;
+    int nbOisifs;
     pthread_mutex_t m_scheduler;
-    pthread_cond_t c_pile;
-    pthread_cond_t c_workingThreads;
+    pthread_cond_t c_scheduler;
 };
 
 int popLastElt(Deques* pile){
@@ -61,7 +66,9 @@ int pushFirstElt(Deques* pile, Noeud* noeud){
 }
 
 int popUp(Noeud **noeud, Deques* pile) {
+    pthread_mutex_lock(&pile->m_thread);
     if (pile->top == NULL) {
+        pthread_mutex_unlock(&pile->m_thread);
         return -1;
     }
     *noeud = pile->top;
@@ -70,34 +77,14 @@ int popUp(Noeud **noeud, Deques* pile) {
     if (!popLastElt(pile)){
         pile->top->next = NULL;
     }
-        
+    pthread_mutex_unlock(&pile->m_thread);
     return 1;
 }
-
-int pushUp(Deques* pile, taskfunc task, void *closure) {
-    if (pile->currentSize == pile->maxSize) {
-        perror("La pile est pleine");
-        errno = EAGAIN;
-        return -1;
-    }
-    Noeud* nouveauNoeud = (Noeud*)malloc(sizeof(Noeud));
-    if (nouveauNoeud == NULL){
-        return -1;
-    }
-    nouveauNoeud->taskfunc = task;
-    nouveauNoeud->closure = closure;
-    pile->currentSize++;
-    if (!pushFirstElt(pile, nouveauNoeud)){
-        nouveauNoeud->prev = pile->top;
-        pile->top->next = nouveauNoeud;
-        pile->top = nouveauNoeud;
-    }
-    return 1;
-}
-
 
 int popBottom(Noeud **noeud, Deques* pile) {
+    pthread_mutex_lock(&pile->m_thread);
     if (pile->bottom == NULL) {
+        pthread_mutex_unlock(&pile->m_thread);
         return -1;
     }
     *noeud = pile->bottom;
@@ -106,17 +93,21 @@ int popBottom(Noeud **noeud, Deques* pile) {
     if (!popLastElt(pile)) {
         pile->bottom->prev = NULL;
     }
+    pthread_mutex_unlock(&pile->m_thread);
     return 1;
 }
 
 int pushBottom(Deques* pile, taskfunc task, void *closure) {
+    pthread_mutex_lock(&pile->m_thread);
     if (pile->currentSize == pile->maxSize) {
         perror("La pile est pleine");
         errno = EAGAIN;
+        pthread_mutex_unlock(&pile->m_thread);
         return -1;
     }
     Noeud* nouveauNoeud = (Noeud*)malloc(sizeof(Noeud));
     if (nouveauNoeud == NULL){
+        pthread_mutex_unlock(&pile->m_thread);
         return -1;
     }
     nouveauNoeud->taskfunc = task;
@@ -128,75 +119,104 @@ int pushBottom(Deques* pile, taskfunc task, void *closure) {
         pile->bottom->prev = nouveauNoeud;
         pile->bottom = nouveauNoeud;
     }
+    pthread_mutex_unlock(&pile->m_thread);
     return 1;
 }
 
+int getIdThread(struct scheduler* scheduler){
+    pthread_t self = pthread_self();
+
+    for (int i = 0; i < scheduler->nbThread; i++) {
+        if (pthread_equal(scheduler->threads[i].thread, self)) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+int steal(struct scheduler* scheduler, Noeud **task){
+    unsigned int seed = time(NULL) + *((int *) pthread_self());
+    int k = rand_r(&seed) % scheduler->nbThread;
+    
+    for (int i = 0; i< scheduler->nbThread; i++){
+        int res = popUp(task, scheduler->threads[(k+i)%scheduler->nbThread].pile);
+        if (res >= 0){
+            return 1;
+        }
+    }
+    
+    return -1;
+}
 
 void* threadFunction(void* scheduler) {
     struct scheduler* scheduler_ = (struct scheduler*)scheduler;
+    int id = getIdThread(scheduler_);
+    if (id < 0){
+        exit(-1);
+    }
     Noeud *task;
+    pthread_mutex_lock(&scheduler_->m_scheduler);
+    pthread_mutex_unlock(&scheduler_->m_scheduler);
     while (1) {
-        pthread_mutex_lock(&scheduler_->m_scheduler);
-        while (scheduler_->pile->top == NULL) {
-            pthread_cond_wait(&scheduler_->c_pile, &scheduler_->m_scheduler);
-        }
-        int ret = pop(&task, scheduler_->pile);
-        pthread_mutex_unlock(&scheduler_->m_scheduler);
-        if (ret >= 0){
+        int res = popBottom(&task, scheduler_->threads[id].pile);
+        if (res < 0){
             pthread_mutex_lock(&scheduler_->m_scheduler);
-            scheduler_->workingThreads++;
+            scheduler_->nbOisifs++;
             pthread_mutex_unlock(&scheduler_->m_scheduler);
-
-            task->taskfunc(task->closure, scheduler_);
-
+            pthread_cond_signal(&scheduler_->c_scheduler);
+            while (steal(scheduler_, &task) < 0){
+                sleep(1);
+            }
             pthread_mutex_lock(&scheduler_->m_scheduler);
-            scheduler_->workingThreads--;
+            scheduler_->nbOisifs--;
             pthread_mutex_unlock(&scheduler_->m_scheduler);
-            pthread_cond_signal(&scheduler_->c_workingThreads);
-            free(task);
         }
+        task->taskfunc(task->closure, scheduler_);
+        
     }
 }
 
-int pile_init(struct scheduler *scheduler, int qlen){
-    Deques *pile = (Deques*) malloc(sizeof(Deques));
+int pile_init(Deques **pile, int qlen){
+    *pile = (Deques*) malloc(sizeof(Deques));
     if (pile == NULL) {
         return -1;
     }
 
-    pile->top = NULL;
-    pile->bottom = NULL;
-    pile->maxSize = qlen;
-    pile->currentSize = 0;
-
-    scheduler->pile = pile;
-
-    return 1;
-}
-
-int threads_init(struct scheduler *scheduler, int nthreads) {
-    scheduler->threads = malloc(nthreads * sizeof(pthread_t));
-    if (scheduler->threads == NULL) {
+    if (pthread_mutex_init(&(*pile)->m_thread, NULL) < 0) {
         return -1;
     }
-    scheduler->workingThreads = 0;
-    for (int i = 0; i < nthreads; i++) {
-        if (pthread_create(&scheduler->threads[i], NULL, threadFunction, (void *)scheduler) != 0) {
-            return -1;
-        }
-    }
+
+    (*pile)->top = NULL;
+    (*pile)->bottom = NULL;
+    (*pile)->maxSize = qlen;
+    (*pile)->currentSize = 0;
+
     return 1;
 }
+
 
 int mutex_init(struct scheduler *scheduler){
     if (pthread_mutex_init(&scheduler->m_scheduler, NULL) < 0) {
         return -1;
     }
-    if (pthread_cond_init(&scheduler->c_pile, NULL) < 0) {
+    if (pthread_cond_init(&scheduler->c_scheduler, NULL) < 0) {
         return -1;
     }
-    if (pthread_cond_init(&scheduler->c_workingThreads, NULL) < 0) {
+    return 1;
+}
+
+int threads_init(struct scheduler *scheduler, int nthreads, int qlen) {
+    scheduler->threads = malloc(nthreads * sizeof(thread));
+    if (scheduler->threads == NULL) {
         return -1;
+    }
+    for (int i = 0; i < nthreads; i++) {
+        if (pile_init(&scheduler->threads[i].pile, qlen) < 0){
+            return -1;
+        }
+        if (pthread_create(&scheduler->threads[i].thread, NULL, threadFunction, (void *)scheduler) != 0) {
+            return -1;
+        }
     }
     return 1;
 }
@@ -204,54 +224,63 @@ int mutex_init(struct scheduler *scheduler){
 int sched_init(int nthreads, int qlen, taskfunc f, void *closure){
     if (nthreads < 0) {
         nthreads = sched_default_threads();
+        #ifdef DEBUG
         printf("On a %d threads.\n", nthreads);
+        #endif
     }
 
     struct scheduler* ordonnanceur = (struct scheduler*) malloc(sizeof(struct scheduler));
+    ordonnanceur->nbThread = nthreads;
+    ordonnanceur->nbOisifs = 0;
     if (ordonnanceur == NULL ) {
         perror("Erreur d'allocation mémoire de l'ordonnanceur");
         return -1;
     }
+    #ifdef DEBUG
     printf("Ordonnanceur alloué\n");
+    #endif
 
     if (mutex_init(ordonnanceur) < 0){
         perror("Erreur initialisation des mutex");
         return -1;
     }
-    printf("Mutex initialisé\n");
-    
-    if (pile_init(ordonnanceur, qlen) < 0){
-        perror("Erreur d'allocation mémoire de la pile");
-        return -1;
-    }
-    printf("Pile initialisé\n");
+    #ifdef DEBUG
+    printf("Mutex initialisés\n");
+    #endif
 
-    if (threads_init(ordonnanceur, nthreads) < 0){
+    pthread_mutex_lock(&ordonnanceur->m_scheduler); //bloc thread
+
+    if (threads_init(ordonnanceur, nthreads, qlen) < 0){
         perror("Erreur initialisation des threads");
         return -1;
     }
+    #ifdef DEBUG
     printf("Threads initialisés\n");
+    #endif
 
-    if (sched_spawn(f, closure, ordonnanceur) < 0) {
-        perror("Erreur tache initail");
+    if (pushBottom(ordonnanceur->threads[0].pile, f, closure) < 0){
+        perror("Erreur tache initial");
         return -1;
     }
+    #ifdef DEBUG
     printf("Tache initial ajouté\n");
+    #endif
 
-    pthread_mutex_lock(&ordonnanceur->m_scheduler);    
-    while (ordonnanceur->workingThreads > 0 || ordonnanceur->pile->currentSize > 0) {
-        pthread_cond_wait(&ordonnanceur->c_workingThreads, &ordonnanceur->m_scheduler);
+    pthread_mutex_unlock(&ordonnanceur->m_scheduler); //lancer thread
+
+    while (ordonnanceur->nbOisifs < nthreads) {
+        pthread_cond_wait(&ordonnanceur->c_scheduler, &ordonnanceur->m_scheduler);
     }
 
     return 1;
 }
 
 int sched_spawn(taskfunc f, void *closure, struct scheduler *s){
-    pthread_mutex_lock(&s->m_scheduler);
-    int res = push(s->pile, f, closure);
-    pthread_mutex_unlock(&s->m_scheduler);
-    pthread_cond_signal(&s->c_pile);
-    if (res < 0) {
+    int id = getIdThread(s);
+    if (id < 0){
+        return -1;
+    }
+    if (pushBottom(s->threads[id].pile, f, closure) < 0) {
         return -1;
     }
     return 1;
