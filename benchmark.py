@@ -1,7 +1,6 @@
 import argparse
 import subprocess
 import matplotlib.pyplot as plt
-
 import re
 
 def run_program(program, threads, size):

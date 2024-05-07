@@ -1,0 +1,2 @@
+make all
+Puis ./bin/sharing pour le work sharing et ./bin/stealing pour le work stealing
